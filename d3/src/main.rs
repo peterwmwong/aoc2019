@@ -1,5 +1,5 @@
 use std::cmp::{max, min};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 enum Ins {
@@ -12,6 +12,7 @@ enum Ins {
 use Ins::*;
 type Wire = Vec<Ins>;
 type WireMap = HashSet<(i32, i32)>;
+type WireDistMap = HashMap<(i32, i32), i32>;
 
 fn read_prog() -> Vec<Wire> {
     std::fs::read_to_string("./input.txt")
@@ -33,34 +34,56 @@ fn read_prog() -> Vec<Wire> {
         .collect()
 }
 
-fn visit(map: &mut WireMap, (x, y): (i32, i32), dx: i32, dy: i32) -> (i32, i32) {
-    for nx in min(x, x + dx)..=max(x, x + dx) {
-        for ny in min(y, y + dy)..=max(y, y + dy) {
-            map.insert((nx, ny));
+fn visit(
+    map: &mut WireMap,
+    dist_map: &mut WireDistMap,
+    (x, y, dist): (i32, i32, i32),
+    dx: i32,
+    dy: i32,
+) -> (i32, i32, i32) {
+    for nx in min(0, dx)..=max(0, dx) {
+        for ny in min(0, dy)..=max(0, dy) {
+            let pos = (nx + x, ny + y);
+            map.insert(pos);
+            dist_map.entry(pos).or_insert(dist + nx.abs() + ny.abs());
         }
     }
-    (x + dx, y + dy)
+    (x + dx, y + dy, dist + dx.abs() + dy.abs())
 }
 
-fn map_wire(w: &Wire) -> WireMap {
-    let mut pos = (0, 0);
-    let mut map: WireMap = WireMap::new();
+fn map_wire(w: &Wire) -> (WireMap, WireDistMap) {
+    let mut pos = (0, 0, 0);
+    let mut map = WireMap::new();
+    let mut dist_map = WireDistMap::new();
     for ins in w {
         pos = match *ins {
-            R(n) => visit(&mut map, pos, n, 0),
-            U(n) => visit(&mut map, pos, 0, n),
-            D(n) => visit(&mut map, pos, 0, -n),
-            L(n) => visit(&mut map, pos, -n, 0),
+            R(n) => visit(&mut map, &mut dist_map, pos, n, 0),
+            U(n) => visit(&mut map, &mut dist_map, pos, 0, n),
+            D(n) => visit(&mut map, &mut dist_map, pos, 0, -n),
+            L(n) => visit(&mut map, &mut dist_map, pos, -n, 0),
             _ => unreachable!(),
         };
     }
-    map
+    (map, dist_map)
 }
 
 fn min_intersection(m1: &WireMap, m2: &WireMap) -> i32 {
     m1.intersection(m2)
         .filter(|(x, y)| x != &0 || y != &0) // Exclude central port
         .map(|(x, y)| x.abs() + y.abs())
+        .min()
+        .unwrap()
+}
+
+fn min_intersection_dist(
+    m1: &WireMap,
+    m1_dist: &WireDistMap,
+    m2: &WireMap,
+    m2_dist: &WireDistMap,
+) -> i32 {
+    m1.intersection(m2)
+        .filter(|(x, y)| x != &0 || y != &0) // Exclude central port
+        .map(move |pos| m1_dist.get(pos).unwrap() + m2_dist.get(pos).unwrap())
         .min()
         .unwrap()
 }
@@ -88,12 +111,22 @@ fn debug_map(m: &WireMap) {
 }
 
 fn part1(wires: &Vec<Wire>) {
-    let wire1_map = map_wire(&wires[0]);
-    let wire2_map = map_wire(&wires[1]);
+    let (wire1_map, _) = map_wire(&wires[0]);
+    let (wire2_map, _) = map_wire(&wires[1]);
     println!("{:?} ", min_intersection(&wire1_map, &wire2_map));
+}
+
+fn part2(wires: &Vec<Wire>) {
+    let (wire1_map, wire1_dist_map) = map_wire(&wires[0]);
+    let (wire2_map, wire2_dist_map) = map_wire(&wires[1]);
+    println!(
+        "{:?} ",
+        min_intersection_dist(&wire1_map, &wire1_dist_map, &wire2_map, &wire2_dist_map)
+    );
 }
 
 fn main() {
     let wires = read_prog();
     part1(&wires);
+    part2(&wires);
 }
